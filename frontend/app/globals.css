@@ -585,6 +585,31 @@ table.candidates-table thead th {
   top: 0;
 }
 
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.th-sort:hover {
+  color: var(--text);
+}
+
+.th-sort-icon-muted {
+  opacity: 0.45;
+}
+
 table.candidates-table tbody tr {
   transition: background 0.12s;
 }

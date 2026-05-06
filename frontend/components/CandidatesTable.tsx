@@ -5,15 +5,75 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
+  type SortingFn,
+  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { Check, MoreHorizontal, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  MoreHorizontal,
+  X,
+} from "lucide-react";
+import dayjs from "dayjs";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { getColumnLabel, getVisibleColumnKeys } from "@/lib/columns";
 import type { Candidate, ColumnsConfig } from "@/lib/types";
 import { renderCandidateCell } from "@/utils/candidate-cell-renderers";
 
 const candidateColumnHelper = createColumnHelper<Candidate>();
+
+const SORTABLE_KEYS = new Set(["name", "email", "date", "age"]);
+
+function parseDateMs(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const raw = String(value).trim();
+  const d = dayjs(raw.replace(" ", "T"));
+  if (!d.isValid()) return null;
+  return d.valueOf();
+}
+
+function parseAge(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const n = Number(String(value).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+const sortString: SortingFn<Candidate> = (rowA, rowB, columnId) => {
+  const a = rowA.getValue(columnId);
+  const b = rowB.getValue(columnId);
+  const sa =
+    a === undefined || a === null || a === ""
+      ? ""
+      : String(a).toLocaleLowerCase();
+  const sb =
+    b === undefined || b === null || b === ""
+      ? ""
+      : String(b).toLocaleLowerCase();
+  return sa.localeCompare(sb, undefined, { numeric: true });
+};
+
+const sortDate: SortingFn<Candidate> = (rowA, rowB, columnId) => {
+  const ta = parseDateMs(rowA.getValue(columnId));
+  const tb = parseDateMs(rowB.getValue(columnId));
+  if (ta === null && tb === null) return 0;
+  if (ta === null) return 1;
+  if (tb === null) return -1;
+  return ta - tb;
+};
+
+const sortAge: SortingFn<Candidate> = (rowA, rowB, columnId) => {
+  const na = parseAge(rowA.getValue(columnId));
+  const nb = parseAge(rowB.getValue(columnId));
+  if (na === null && nb === null) return 0;
+  if (na === null) return 1;
+  if (nb === null) return -1;
+  return na - nb;
+};
 
 type Props = {
   candidates: Candidate[];
@@ -33,6 +93,7 @@ export default function CandidatesTable({
   onOpenCandidate,
 }: Props) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const visibleKeys = getVisibleColumnKeys(columns);
 
   useEffect(() => {
@@ -49,10 +110,38 @@ export default function CandidatesTable({
   }, []);
 
   const tableColumns = useMemo(() => {
-    const dataColumns = visibleKeys.map((key) =>
-      candidateColumnHelper.accessor((row) => row[key], {
+    const dataColumns = visibleKeys.map((key) => {
+      const sortable = SORTABLE_KEYS.has(key);
+      const sortingFn =
+        key === "date" ? sortDate : key === "age" ? sortAge : sortString;
+      return candidateColumnHelper.accessor((row) => row[key], {
         id: key,
-        header: () => getColumnLabel(key),
+        enableSorting: sortable,
+        sortingFn,
+        header: ({ column }) => {
+          const label = getColumnLabel(key);
+          if (!sortable) return label;
+          return (
+            <button
+              type="button"
+              className="th-sort"
+              onClick={column.getToggleSortingHandler()}
+            >
+              <span>{label}</span>
+              {column.getIsSorted() === "asc" ? (
+                <ArrowUp size={14} aria-hidden="true" />
+              ) : column.getIsSorted() === "desc" ? (
+                <ArrowDown size={14} aria-hidden="true" />
+              ) : (
+                <ArrowUpDown
+                  size={14}
+                  className="th-sort-icon-muted"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          );
+        },
         cell: (info) =>
           renderCandidateCell(
             key,
@@ -60,17 +149,19 @@ export default function CandidatesTable({
             info.row.original,
             onOpenCandidate,
           ),
-      }),
-    );
+      });
+    });
 
     const statusColumn = candidateColumnHelper.display({
       id: "status",
+      enableSorting: false,
       header: () => "Status",
       cell: (info) => <StatusBadge reason={info.row.original.reason} />,
     });
 
     const actionsColumn = candidateColumnHelper.display({
       id: "actions",
+      enableSorting: false,
       header: () => "Actions",
       cell: (info) => {
         const candidate = info.row.original;
@@ -147,7 +238,10 @@ export default function CandidatesTable({
   const table = useReactTable({
     data: candidates,
     columns: tableColumns,
+    state: { sorting },
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
 
   return (
@@ -157,7 +251,18 @@ export default function CandidatesTable({
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
-                <th key={header.id}>
+                <th
+                  key={header.id}
+                  aria-sort={
+                    header.column.getCanSort()
+                      ? header.column.getIsSorted() === "asc"
+                        ? "ascending"
+                        : header.column.getIsSorted() === "desc"
+                          ? "descending"
+                          : "none"
+                      : undefined
+                  }
+                >
                   {header.isPlaceholder
                     ? null
                     : flexRender(
