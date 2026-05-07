@@ -6,6 +6,7 @@ import CandidatesTable from "@/components/CandidatesTable";
 import CandidateDetailsModal from "@/components/CandidateDetailsModal";
 import ColumnsMenu from "@/components/ColumnsMenu";
 import RejectCandidateModal from "@/components/RejectCandidateModal";
+import TablePagination from "@/components/TablePagination";
 import emiLogoColor from "@/assets/emi-logo-color.png";
 import {
   readStoredReviewPlacement,
@@ -18,6 +19,12 @@ import {
   getColumns,
   rejectCandidate,
 } from "@/lib/api";
+import {
+  DEFAULT_PAGE_SIZE,
+  readStoredPageSize,
+  writePageSize,
+  type PageSize,
+} from "@/lib/table-pagination";
 import type { Candidate, ColumnsConfig, StatusFilter } from "@/lib/types";
 
 const COLUMNS_STORAGE_KEY = "candidates:columns";
@@ -68,11 +75,22 @@ export default function HomePage() {
   const [detailsTarget, setDetailsTarget] = useState<Candidate | null>(null);
   const [reviewPlacement, setReviewPlacement] =
     useState<ReviewColumnPlacement>("right");
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+
+  useEffect(() => {
+    const stored = readStoredPageSize();
+    if (stored) setPageSize(stored);
+  }, []);
 
   useEffect(() => {
     const stored = readStoredReviewPlacement();
     if (stored) setReviewPlacement(stored);
   }, []);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [statusFilter, search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +191,31 @@ export default function HomePage() {
       setPendingId(null);
     }
   }
+
+  function handlePageSizeChange(size: PageSize) {
+    setPageSize(size);
+    setPageIndex(0);
+    writePageSize(size);
+  }
+
+  const filteredTotal = filteredCandidates.length;
+  const paginationTotalPages = Math.max(
+    1,
+    Math.ceil(filteredTotal / pageSize),
+  );
+  const safePageIndex = Math.min(
+    Math.max(0, pageIndex),
+    paginationTotalPages - 1,
+  );
+
+  const paginatedCandidates = useMemo(() => {
+    const start = safePageIndex * pageSize;
+    return filteredCandidates.slice(start, start + pageSize);
+  }, [filteredCandidates, safePageIndex, pageSize]);
+
+  useEffect(() => {
+    if (pageIndex !== safePageIndex) setPageIndex(safePageIndex);
+  }, [pageIndex, safePageIndex]);
 
   const total = candidates.length;
   const approved = candidates.filter((c) => c.reason === "").length;
@@ -314,15 +357,24 @@ export default function HomePage() {
             </div>
           )}
           {!loading && !error && filteredCandidates.length > 0 && (
-            <CandidatesTable
-              candidates={filteredCandidates}
-              columns={columns}
-              pendingId={pendingId}
-              reviewPlacement={reviewPlacement}
-              onApprove={handleApprove}
-              onReject={(c) => setRejectTarget(c)}
-              onOpenCandidate={(c) => setDetailsTarget(c)}
-            />
+            <>
+              <CandidatesTable
+                candidates={paginatedCandidates}
+                columns={columns}
+                pendingId={pendingId}
+                reviewPlacement={reviewPlacement}
+                onApprove={handleApprove}
+                onReject={(c) => setRejectTarget(c)}
+                onOpenCandidate={(c) => setDetailsTarget(c)}
+              />
+              <TablePagination
+                pageIndex={safePageIndex}
+                pageSize={pageSize}
+                totalItems={filteredTotal}
+                onPageIndexChange={setPageIndex}
+                onPageSizeChange={handlePageSizeChange}
+              />
+            </>
           )}
         </div>
       </main>
