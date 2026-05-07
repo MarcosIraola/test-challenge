@@ -8,6 +8,11 @@ import ColumnsMenu from "@/components/ColumnsMenu";
 import RejectCandidateModal from "@/components/RejectCandidateModal";
 import emiLogoColor from "@/assets/emi-logo-color.png";
 import {
+  readStoredReviewPlacement,
+  writeReviewPlacement,
+  type ReviewColumnPlacement,
+} from "@/lib/review-column-placement";
+import {
   approveCandidate,
   getCandidates,
   getColumns,
@@ -61,6 +66,13 @@ export default function HomePage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Candidate | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<Candidate | null>(null);
+  const [reviewPlacement, setReviewPlacement] =
+    useState<ReviewColumnPlacement>("right");
+
+  useEffect(() => {
+    const stored = readStoredReviewPlacement();
+    if (stored) setReviewPlacement(stored);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +113,11 @@ export default function HomePage() {
     try {
       window.localStorage.removeItem(COLUMNS_STORAGE_KEY);
     } catch {}
+  }
+
+  function handleReviewPlacementChange(next: ReviewColumnPlacement) {
+    setReviewPlacement(next);
+    writeReviewPlacement(next);
   }
 
   const isDefaultColumns = useMemo(
@@ -251,6 +268,29 @@ export default function HomePage() {
             />
           </div>
 
+          <div
+            className="filter-group"
+            role="radiogroup"
+            aria-label="Review column position"
+          >
+            <button
+              type="button"
+              className={reviewPlacement === "left" ? "active" : ""}
+              aria-pressed={reviewPlacement === "left"}
+              onClick={() => handleReviewPlacementChange("left")}
+            >
+              Review left
+            </button>
+            <button
+              type="button"
+              className={reviewPlacement === "right" ? "active" : ""}
+              aria-pressed={reviewPlacement === "right"}
+              onClick={() => handleReviewPlacementChange("right")}
+            >
+              Review right
+            </button>
+          </div>
+
           <div className="spacer" />
 
           <span className="summary">
@@ -278,6 +318,7 @@ export default function HomePage() {
               candidates={filteredCandidates}
               columns={columns}
               pendingId={pendingId}
+              reviewPlacement={reviewPlacement}
               onApprove={handleApprove}
               onReject={(c) => setRejectTarget(c)}
               onOpenCandidate={(c) => setDetailsTarget(c)}

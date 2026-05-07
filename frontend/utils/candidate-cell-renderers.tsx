@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import CopyTextButton from "@/components/ui/CopyTextButton";
 import type { Candidate } from "@/lib/types";
 import { getGoogleMapsSearchUrl, isHttpUrl } from "@/utils/candidate-links";
+import { parseCandidateInstantMs } from "@/utils/candidate-datetime";
 
 type OpenCandidateHandler = (candidate: Candidate) => void;
 
@@ -56,15 +57,15 @@ function formatId(value: unknown): ReactNode {
 function formatDate(value: unknown): ReactNode {
   if (value === undefined || value === null || value === "") return "-";
   const raw = String(value).trim();
-  const d = dayjs(raw.replace(" ", "T"));
-  if (!d.isValid()) {
+  const ms = parseCandidateInstantMs(value);
+  if (ms === null) {
     return (
       <span className="cell-date" title={raw}>
         {raw.split(/\s+/)[0] || raw}
       </span>
     );
   }
-  const formatted = d.format("MMM D, YYYY, h:mm A");
+  const formatted = dayjs(ms).format("MMM D, YYYY, h:mm A");
   return (
     <span className="cell-date" title={raw}>
       {formatted}
@@ -131,6 +132,19 @@ function formatLocation(value: unknown): ReactNode {
   );
 }
 
+function formatGraduated(value: unknown): ReactNode {
+  const raw = formatCell(value);
+  if (raw === "-") return raw;
+  const s = String(value).trim();
+  if (s.length <= 20) return <span className="cell-graduated">{s}</span>;
+  const display = `${s.slice(0, 17)}...`;
+  return (
+    <span className="cell-graduated" title={s}>
+      {display}
+    </span>
+  );
+}
+
 function renderCvLinkCell(value: unknown): ReactNode {
   if (typeof value === "string" && isHttpUrl(value)) {
     return (
@@ -175,6 +189,7 @@ const CELL_RENDERERS: Record<string, CellRenderer> = {
   reason: (value) => formatReason(value),
   date: (value) => formatDate(value),
   career: (value) => formatCareer(value),
+  graduated: (value) => formatGraduated(value),
   location: (value) => formatLocation(value),
   cv_zonajobs: (value) => renderCvLinkCell(value),
   cv_bumeran: (value) => renderCvLinkCell(value),
